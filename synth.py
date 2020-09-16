@@ -55,6 +55,7 @@ for version in admin_versions:
         # bazel_target=f"//google/firestore/admin/{version}:firestore-admin-{version}-py",
         # include_protos=True,
         proto_path=f"google/firestore/admin/{version}",
+        generator_version="v0.33.3"
     )
     s.move(library / f"google/firestore/admin_{version}", f"google/cloud/firestore_admin_{version}")
     s.move(library / "tests")
@@ -135,6 +136,89 @@ s.replace(
     '"--verbose", system_test',
 )
 
+# Add pytype support
+
+s.replace(
+    ".gitignore",
+    """\
+.pytest_cache
+""",
+    """\
+.pytest_cache
+.pytype
+""",
+)
+
+s.replace(
+    "setup.cfg",
+    """\
+universal = 1
+""",
+    """\
+universal = 1
+
+[pytype]
+python_version = 3.8
+inputs =
+    google/cloud/
+exclude =
+    tests/
+output = .pytype/
+# Workaround for https://github.com/google/pytype/issues/150
+disable = pyi-error
+""",
+)
+
+s.replace(
+    "noxfile.py",
+    """\
+BLACK_VERSION = "black==19.10b0"
+""",
+    """\
+PYTYPE_VERSION = "pytype==2020.7.24"
+BLACK_VERSION = "black==19.10b0"
+""",
+)
+
+s.replace(
+    "noxfile.py",
+    '''\
+@nox.session\(python=DEFAULT_PYTHON_VERSION\)
+def lint_setup_py\(session\):
+''',
+    '''\
+@nox.session(python="3.7")
+def pytype(session):
+    """Run pytype
+    """
+    session.install(PYTYPE_VERSION)
+    session.run("pytype",)
+
+
+@nox.session(python=DEFAULT_PYTHON_VERSION)
+def lint_setup_py(session):
+''',
+)
+
+# Fix up unit test dependencies
+
+s.replace(
+    "noxfile.py",
+    '''\
+    session.install\("asyncmock", "pytest-asyncio"\)
+''',
+    '''\
+    session.install("pytest-asyncio", "aiounittest")
+''',
+)
+
+# Fix up system test dependencies
+
+s.replace(
+    "noxfile.py",
+    '''"mock", "pytest", "google-cloud-testutils",''',
+    '''"mock", "pytest", "pytest-asyncio", "google-cloud-testutils",''',
+)
 
 s.shell.run(["nox", "-s", "blacken"], hide_output=False)
 
